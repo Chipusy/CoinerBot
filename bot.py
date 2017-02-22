@@ -17,9 +17,12 @@ except ImportError:
     from io import StringIO
 
 import settings
-import pyqrcode
+
+from utuls import *
+
 import btcrpc
 import base64
+
 
 PROCESS_STEPS = False
 
@@ -27,57 +30,29 @@ bot = telebot.TeleBot(settings.TG_API_TOKEN)
 db = MongoClient().coinerbot
 
 
-def order_dic(dic):
-    ordered_dic={}
-    key_ls=sorted(dic.keys())
-    for key in key_ls:
-        ordered_dic[key]=dic[key]
-    return ordered_dic
-
-def generate_qrcode(address):
-    filename = '/tmp/' + address + '.png'
-    qr = pyqrcode.create(address)
-    qr.png(filename, scale=5)
-
-    return open(filename, 'rb')
-
-command_list = {
-    'help': 'command list.',
-    'address': 'bitcoin-address list.',
-    'balance': 'show current balance.',
-    'history': 'transaction list.',
-    'send': 'send coins.',
-}
-
-commands = ''
-for command in order_dic(command_list):
-    commands += '/' + command + ' — <i>' + command_list[command] + '</i>\n'
+def do_start():
+    try:
+        user = bunch(db.account.find_one({'tg_id': message.from_user.id,}))
+    except Exception as e:
+        msg = bot.send_message(user.tg_id, """\
+Do /start
+""", parse_mode="HTML")
+        return
 
 
 @bot.message_handler(commands=['help',])
 def help(message):
-    try:
-        user = bunch(db.account.find_one({'tg_id': message.from_user.id,}))
-    except Exception as e:
-        msg = bot.send_message(user.tg_id, """\
-Do /start
-""", parse_mode="HTML")
-        return
+    do_start(message)
 
     msg = bot.send_message(user.tg_id, """\
 Command list:
 {}
-""".format(commands), parse_mode="HTML")
+""".format(settings.COMMANDS), parse_mode="HTML")
+
 
 @bot.message_handler(commands=['send',])
 def send(message):
-    try:
-        user = bunch(db.account.find_one({'tg_id': message.from_user.id,}))
-    except Exception as e:
-        msg = bot.send_message(user.tg_id, """\
-Do /start
-""", parse_mode="HTML")
-        return
+    do_start(message)
 
     msg = bot.send_message(user.tg_id, """\
 How much you want to send?
@@ -87,13 +62,7 @@ How much you want to send?
     bot.register_next_step_handler(msg, process_send_step1)
 
 def process_send_step1(message):
-    try:
-        user = bunch(db.account.find_one({'tg_id': message.from_user.id,}))
-    except Exception as e:
-        msg = bot.reply_to(message, """\
-Do /start
-""", parse_mode="HTML")
-        return
+    do_start(message)
 
     try:
         chat_id = message.chat.id
@@ -113,13 +82,7 @@ Write bitcoin-address to send.
         bot.reply_to(message, 'Oooops: '+str(e))
 
 def process_send_step2(message):
-    try:
-        user = bunch(db.account.find_one({'tg_id': message.from_user.id,}))
-    except Exception as e:
-        msg = bot.reply_to(message, """\
-Do /start
-""", parse_mode="HTML")
-        return
+    do_start(message)
         
     try:
         chat_id = message.chat.id
@@ -136,13 +99,7 @@ Confirm that you want to send <b>{}</b> BTC to <b>{}</b>.
         bot.reply_to(message, 'Oooops: '+str(e))
     
 def process_send_step3(message):
-    try:
-        user = bunch(db.account.find_one({'tg_id': message.from_user.id,}))
-    except Exception as e:
-        msg = bot.reply_to(message, """\
-Do /start
-""", parse_mode="HTML")
-        return
+    do_start(message)
 
     try:
         if message.text == 'Confirm':
@@ -157,47 +114,32 @@ Do /start
 
     PROCESS_STEPS = False
 
+
 @bot.message_handler(commands=['history',])
 def history(message):
-    try:
-        user = bunch(db.account.find_one({'tg_id': message.from_user.id,}))
-    except Exception as e:
-        msg = bot.send_message(user.tg_id, """\
-Do /start
-""", parse_mode="HTML")
-        return
+    do_start(message)
 
     msg = bot.send_message(user.tg_id, """\
 History part.
 """, parse_mode="HTML")
 
+
 @bot.message_handler(commands=['address',])
 def address(message):
-    try:
-        user = bunch(db.account.find_one({'tg_id': message.from_user.id,}))
-        address = bunch(db.address.find_one({'tg_id': message.from_user.id, 'main': True}))
-    except Exception as e:
-        msg = bot.reply_to(message, """\
-Do /start
-""", parse_mode="HTML")
-        return
+    do_start(message)
 
     bot.send_photo(user.tg_id, generate_qrcode(address.address), caption=address.address)
 
+
 @bot.message_handler(commands=['balance',])
 def balance(message):
-    try:
-        user = bunch(db.account.find_one({'tg_id': message.from_user.id,}))
-    except Exception as e:
-        msg = bot.reply_to(message, """\
-Do /start
-""", parse_mode="HTML")
-        return
+    do_start(message)
 
     balance = Decimal(user.bitcoin)
     msg = bot.send_message(user.tg_id, """\
 Account balance: <b>{}</b> BTC
 """.format(balance), parse_mode="HTML")
+
 
 @bot.message_handler(commands=['start',])
 def send_welcome(message):
@@ -246,62 +188,13 @@ Hi <b>{}</b>! {}
 {} <b>{}</b>,
 and this is your command list:
 {}
-""".format(username, i_am, your_address, address.address, commands), parse_mode="HTML")
+""".format(username, i_am, your_address, address.address, settings.COMMANDS), parse_mode="HTML")
 
-@bot.message_handler(commands=['clear',])
-def clear(message):
-    if message.from_user.id in settings.ADMIN_IDS:
-        db.account.remove()
-        db.address.remove()
-        msg = bot.send_message(message.from_user.id, 'Done!', parse_mode="HTML")
-
-# @bot.message_handler(func=lambda message: True)
-# def echo_message(message):
-#     if not PROCESS_STEPS:
-#         return help(message)
-
-def process_name_step(message):
-    try:
-        chat_id = message.chat.id
-        name = message.text
-        user = User(name)
-        user_dict[chat_id] = user
-        msg = bot.reply_to(message, 'How old are you?')
-        bot.register_next_step_handler(msg, process_age_step)
-    except Exception as e:
-        bot.reply_to(message, 'oooops')
-
-
-def process_age_step(message):
-    try:
-        chat_id = message.chat.id
-        age = message.text
-        if not age.isdigit():
-            msg = bot.reply_to(message, 'Age should be a number. How old are you?')
-            bot.register_next_step_handler(msg, process_age_step)
-            return
-        user = user_dict[chat_id]
-        user.age = age
-        markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
-        markup.add('Male', 'Female')
-        msg = bot.reply_to(message, 'What is your gender', reply_markup=markup)
-        bot.register_next_step_handler(msg, process_sex_step)
-    except Exception as e:
-        bot.reply_to(message, 'oooops')
-
-
-def process_sex_step(message):
-    try:
-        chat_id = message.chat.id
-        sex = message.text
-        user = user_dict[chat_id]
-        if (sex == u'Male') or (sex == u'Female'):
-            user.sex = sex
-        else:
-            raise Exception()
-        bot.send_message(chat_id, 'Nice to meet you ' + user.name + '\n Age:' + str(user.age) + '\n Sex:' + user.sex)
-    except Exception as e:
-        bot.reply_to(message, 'oooops')
-
+# @bot.message_handler(commands=['clear',])
+# def clear(message):
+#     if message.from_user.id in settings.ADMIN_IDS:
+#         db.account.remove()
+#         db.address.remove()
+#         msg = bot.send_message(message.from_user.id, 'Done!', parse_mode="HTML")
 
 bot.polling()
