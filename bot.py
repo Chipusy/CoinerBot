@@ -18,7 +18,7 @@ except ImportError:
 
 import settings
 
-from utuls import *
+from utils import *
 
 import btcrpc
 import base64
