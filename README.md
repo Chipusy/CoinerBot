@@ -1,11 +1,6 @@
-Bitcoin wallet telegram bot. 
-
 #CoinerBot is a telegram client for bitcoind. This is not stable version! Work in progress.
 
-
-##Install on ubuntu/debian.
-
-###You already must have configured bitcoins with rpc!
+###This howto is for ubuntu/debian, and you already must have configured bitcoind with rpc!
 
 ####First of all we will need mongo, python2.7+, pip and virtualenv, make as root:
 
